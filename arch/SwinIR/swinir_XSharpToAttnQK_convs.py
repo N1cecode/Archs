@@ -8,7 +8,8 @@ import torch.nn as nn
 import torch.utils.checkpoint as checkpoint
 
 # from basicsr.utils.registry import ARCH_REGISTRY
-from .arch_util import to_2tuple, trunc_normal_
+from arch.arch_util import to_2tuple, trunc_normal_
+
 
 class Sobel(nn.Module):
     def __init__(self):
@@ -38,9 +39,9 @@ class Sobel(nn.Module):
         magnitude = torch.sqrt(grad_x**2 + grad_y**2)
         return magnitude
 
-class ConvSkip(nn.Module):
+class EdgeExtraction(nn.Module):
     def __init__(self, dim):
-        super(ConvSkip, self).__init__()
+        super(EdgeExtraction, self).__init__()
 
         self.hpf = Sobel()
         self.conv = nn.Conv2d(3, dim, kernel_size=3, stride=1, padding=1, bias=True)
@@ -48,6 +49,18 @@ class ConvSkip(nn.Module):
     def forward(self, x):
         x = self.hpf(x)
         x = self.conv(x)
+        return x
+    
+class EdgeConv(nn.Module):
+    def __init__(self, dim):
+        super(EdgeConv, self).__init__()
+
+        self.conv = nn.Conv2d(dim, dim, kernel_size=3, stride=1, padding=1, bias=True)
+        self.gelu = nn.GELU()
+
+    def forward(self, x):
+        x = self.conv(x)
+        x = self.gelu(x)
         return x
 
 def drop_path(x, drop_prob: float = 0., training: bool = False):
@@ -171,8 +184,8 @@ class WindowAttention(nn.Module):
         relative_position_index = relative_coords.sum(-1)  # Wh*Ww, Wh*Ww
         self.register_buffer('relative_position_index', relative_position_index)
 
-        self.qv = nn.Linear(dim, dim * 2, bias=qkv_bias)
-        self.k = nn.Linear(dim, dim, bias=qkv_bias)
+        self.v = nn.Linear(dim, dim, bias=qkv_bias)
+        self.qk = nn.Linear(dim, dim * 2, bias=qkv_bias)
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj = nn.Linear(dim, dim)
 
@@ -188,10 +201,11 @@ class WindowAttention(nn.Module):
             mask: (0/-inf) mask with shape of (num_windows, Wh*Ww, Wh*Ww) or None
         """
         b_, n, c = x.shape
-        qv = self.qv(x).reshape(b_, n, 2, self.num_heads, c // self.num_heads).permute(2, 0, 3, 1, 4)
-        k = self.k(x_sharp).reshape(b_, n, 1, self.num_heads, c // self.num_heads).permute(2, 0, 3, 1, 4)
-        q, v= qv[0], qv[1]  # make torchscript happy (cannot use tensor as tuple)
-        k = k[0]
+        v = self.k(v).reshape(b_, n, 1, self.num_heads, c // self.num_heads).permute(2, 0, 3, 1, 4)
+        qk = self.qk(x_sharp).reshape(b_, n, 2, self.num_heads, c // self.num_heads).permute(2, 0, 3, 1, 4)
+
+        v = v[0]
+        q, k = qk[0], qk[1]  # make torchscript happy (cannot use tensor as tuple)
 
         q = q * self.scale
         attn = (q @ k.transpose(-2, -1))
@@ -804,7 +818,7 @@ class SwinIR_Modified(nn.Module):
 
         # ------------------------- 1, shallow feature extraction ------------------------- #
         self.conv_first = nn.Conv2d(num_in_ch, embed_dim, 3, 1, 1)
-        self.conv_skip = ConvSkip(embed_dim)
+        self.edge_ex = EdgeExtraction(embed_dim)
 
         # ------------------------- 2, deep feature extraction ------------------------- #
         self.num_layers = len(depths)
@@ -845,6 +859,7 @@ class SwinIR_Modified(nn.Module):
 
         # build Residual Swin Transformer blocks (RSTB)
         self.layers = nn.ModuleList()
+        self.edge_convs = nn.ModuleList()
         for i_layer in range(self.num_layers):
             layer = RSTB(
                 dim=embed_dim,
@@ -865,6 +880,8 @@ class SwinIR_Modified(nn.Module):
                 patch_size=patch_size,
                 resi_connection=resi_connection)
             self.layers.append(layer)
+            edge_conv = EdgeConv(embed_dim)
+            self.edge_convs.append(edge_conv)
         self.norm = norm_layer(self.num_features)
 
         # build the last conv layer in deep feature extraction
@@ -924,13 +941,16 @@ class SwinIR_Modified(nn.Module):
     def forward_features(self, x, x_edge):
         x_size = (x.shape[2], x.shape[3])
         x = self.patch_embed(x)
-        x_edge = self.patch_embed(x_edge)
+        
         if self.ape:
             x = x + self.absolute_pos_embed
         x = self.pos_drop(x)
 
-        for layer in self.layers:
+        for i, layer in enumerate(self.layers):
+            x_edge = self.edge_convs[i](x_edge)
+            x_edge = self.patch_embed(x_edge)
             x = layer(x, x_size, x_edge)
+            x_edge = self.patch_unembed(x_edge, x_size)
 
         x = self.norm(x)  # b seq_len c
         x = self.patch_unembed(x, x_size)
@@ -941,7 +961,7 @@ class SwinIR_Modified(nn.Module):
         self.mean = self.mean.type_as(x)
         x = (x - self.mean) * self.img_range
 
-        x_edge = self.conv_skip(x)
+        x_edge = self.edge_ex(x)
 
         if self.upsampler == 'pixelshuffle':
             # for classical SR

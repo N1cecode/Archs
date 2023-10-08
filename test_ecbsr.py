@@ -1,7 +1,7 @@
 import torch
-from torchsummary import summary
+from torchsummary import summary, summary_name
 
-from arch.swinir_arch import SwinIR
+from arch.ecbsr_conv2d import ECBSR
 
 size_dict = {
     '480p': (720, 480),
@@ -42,16 +42,9 @@ classical_weight['img_size'] = ((hr_size[0] // classical_weight['upscale'] // cl
 
 params = light_weight
 
-model = SwinIR(
-    upscale=params['upscale'],
-    img_size=params['img_size'],
-    window_size=params['window_size'],
-    img_range=params['img_range'],
-    depths=params['depths'],
-    embed_dim=params['embed_dim'],
-    num_heads=params['num_heads'],
-    mlp_ratio=params['mlp_ratio'],
-    upsampler=params['upsampler'])
-
-summary(model, (3, params['img_size'][0], params['img_size'][1]), device='cpu')
+model = ECBSR(num_in_ch=3, num_out_ch=3, num_block=4, num_channel=16, with_idt=False, act_type='prelu', scale=4)
+model.train()
+summary_name(model, (3, params['img_size'][0], params['img_size'][1]), device='cpu')
+model.eval()
+summary_name(model, (3, params['img_size'][0], params['img_size'][1]), device='cpu')
 # print(height, width, model.flops() / 1e9)
