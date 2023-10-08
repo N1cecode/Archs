@@ -1,10 +1,11 @@
 import torch
 from torchsummary import summary, summary_name
+from ptflops import get_model_complexity_info
 
 # from arch.swinir_arch import SwinIR
 from arch.SwinIR.swinir_XSharpToAttnKV_SFBs import SwinIR_Modified
 
-from ptflops import get_model_complexity_info
+
 
 
 size_dict = {

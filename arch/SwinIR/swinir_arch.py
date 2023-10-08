@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.utils.checkpoint as checkpoint
 
 # from basicsr.utils.registry import ARCH_REGISTRY
-from arch.arch_util import to_2tuple, trunc_normal_
+from basicsr.archs.arch_util import to_2tuple, trunc_normal_
 
 
 def drop_path(x, drop_prob: float = 0., training: bool = False):
