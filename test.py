@@ -3,9 +3,14 @@ from torchsummary import summary
 
 from arch.swinir_arch import SwinIR
 
-hr_size = (1024, 720)
-height = (hr_size[0] // 4 // 8 + 1) * 8
-width = (hr_size[1] // 4 // 8 + 1) * 8
+size_dict = {
+    '480p': (720, 480),
+    '720p': (1280, 720),
+    '1080p':(1920, 1080),
+    '2k':   (2560, 1440),
+    '4k':   (4096, 2160)}
+
+hr_size = size_dict['720p']
 
 light_weight = {
     'upscale': 4,
@@ -48,5 +53,5 @@ model = SwinIR(
     mlp_ratio=params['mlp_ratio'],
     upsampler=params['upsampler'])
 
-summary(model, (3, height, width), device='cpu')
+summary(model, (3, params['img_size'][0], params['img_size'][1]), device='cpu')
 # print(height, width, model.flops() / 1e9)
