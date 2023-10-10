@@ -1,12 +1,9 @@
 import torch
-from torchsummary import summary, summary_name
+from torchinfo import summary
 from ptflops import get_model_complexity_info
 
 # from arch.swinir_arch import SwinIR
-from arch.SwinIR.swinir_XSharpToAttnKV_SFBs import SwinIR_Modified
-
-
-
+from arch.SwinIR.swinir_arch import SwinIR
 
 size_dict = {
     '480p': (720, 480),
@@ -47,7 +44,7 @@ classical_weight['img_size'] = ((hr_size[0] // classical_weight['upscale'] // cl
 
 params = light_weight
 
-model = SwinIR_Modified(
+model = SwinIR(
     upscale=params['upscale'],
     img_size=params['img_size'],
     window_size=params['window_size'],
@@ -58,14 +55,14 @@ model = SwinIR_Modified(
     mlp_ratio=params['mlp_ratio'],
     upsampler=params['upsampler'])
 
-# summary(model, (3, params['img_size'][0], params['img_size'][1]), device='cpu')
+summary(model, (3, params['img_size'][0], params['img_size'][1]), verbose=2, device='cpu', depth=3)
 # summary_name(model, (3, params['img_size'][0], params['img_size'][1]), device='cpu')
 # print(height, width, model.flops() / 1e9)
 
 
-macs, params = get_model_complexity_info(model, (3, 64, 64), verbose=False, print_per_layer_stat=True)
+# macs, params = get_model_complexity_info(model, (3, 64, 64), verbose=False, print_per_layer_stat=True)
 
-macs = float(macs[:-4])
+# macs = float(macs[:-4])
 
-print('MACs:', macs)
-print('Params:', params)
+# print('MACs:', macs)
+# print('Params:', params)
