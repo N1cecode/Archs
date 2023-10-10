@@ -6,8 +6,8 @@ import torch
 import torch.nn as nn
 import torch.utils.checkpoint as checkpoint
 
-from basicsr.utils.registry import ARCH_REGISTRY
-from .arch_util import to_2tuple, trunc_normal_
+# from basicsr.utils.registry import ARCH_REGISTRY
+from basicsr.archs.arch_util import to_2tuple, trunc_normal_
 import torch.nn.functional as F
 
 class emptyModule(nn.Module):
@@ -756,7 +756,7 @@ class UpsampleOneStep(nn.Sequential):
         return flops
 
 
-@ARCH_REGISTRY.register()
+# @ARCH_REGISTRY.register()
 class SRFormer(nn.Module):
     r""" SRFormer
         A PyTorch implement of : `SRFormer: Permuted Self-Attention for Single Image Super-Resolution`, based on Swin Transformer.
