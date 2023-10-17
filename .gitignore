@@ -27,6 +27,7 @@ test_swinir.py
 *.pth
 *.zip
 *.npy
+*.pt
 
 # template
 
