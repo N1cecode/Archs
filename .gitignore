@@ -14,6 +14,9 @@ scripts/__init__.py
 
 # ignored files
 version.py
+test_ecbsr.py
+test_pisr.py
+test_swinir.py
 
 # ignored files with suffix
 *.html
@@ -23,6 +26,7 @@ version.py
 *.gif
 *.pth
 *.zip
+*.npy
 
 # template
 
