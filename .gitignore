@@ -5,6 +5,7 @@ results/*
 tb_logger/*
 wandb/*
 tmp/*
+.vscode
 
 docs/api
 scripts/__init__.py
@@ -26,6 +27,7 @@ test_**.py
 *.jpg
 *.gif
 *.pth
+*.onnx
 *.zip
 *.npy
 *.pt
