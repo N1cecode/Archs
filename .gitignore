@@ -19,6 +19,7 @@ test_ecbsr.py
 test_pisr.py
 test_swinir.py
 test_**.py
+test.py
 
 # ignored files with suffix
 *.html
