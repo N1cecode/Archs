@@ -320,8 +320,9 @@ class WindowAttention(nn.Module):
         relative_position_index = relative_coords.sum(-1)  # Wh*Ww, Wh*Ww
         self.register_buffer('relative_position_index', relative_position_index)
 
-        self.q = nn.Linear(dim, dim, bias=qkv_bias)
-        self.kv = nn.Linear(dim, dim * 2, bias=qkv_bias)
+        self.qk = nn.Linear(dim, dim * 2, bias=qkv_bias)
+        self.v = nn.Linear(dim, dim, bias=qkv_bias)
+        
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj = nn.Linear(dim, dim)
 
@@ -330,26 +331,31 @@ class WindowAttention(nn.Module):
         trunc_normal_(self.relative_position_bias_table, std=.02)
         self.softmax = nn.Softmax(dim=-1)
 
-    def forward(self, x, x_sharp, mask=None):
+    def forward(self, x, x_edge, mask=None):
         """
         Args:
             x: input features with shape of (num_windows*b, n, c)
             mask: (0/-inf) mask with shape of (num_windows, Wh*Ww, Wh*Ww) or None
         """
         b_, n, c = x.shape
-        q = self.q(x).reshape(b_, n, 1, self.num_heads, c // self.num_heads).permute(2, 0, 3, 1, 4)
-        kv = self.kv(x_sharp).reshape(b_, n, 2, self.num_heads, c // self.num_heads).permute(2, 0, 3, 1, 4)
+        qk = self.qk(x).reshape(b_, n, 2, self.num_heads, c // self.num_heads).permute(2, 0, 3, 1, 4)
+        qk_edge = self.qk(x_edge).reshape(b_, n, 2, self.num_heads, c // self.num_heads).permute(2, 0, 3, 1, 4)
+        v = self.v(x).reshape(b_, n, 1, self.num_heads, c // self.num_heads).permute(2, 0, 3, 1, 4)
 
-        q = q[0]
-        k, v= kv[0], kv[1]  # make torchscript happy (cannot use tensor as tuple)
+        q, k= qk[0], qk[1]  # make torchscript happy (cannot use tensor as tuple)
+        q_edge, k_edge = qk_edge[0], qk_edge[1]
+        v = v[0]
 
         q = q * self.scale
         attn = (q @ k.transpose(-2, -1))
+        
+        q_edge = q_edge * self.scale
+        attn_edge = (q_edge @ k_edge.transpose(-2, -1))
 
         relative_position_bias = self.relative_position_bias_table[self.relative_position_index.view(-1)].view(
             self.window_size[0] * self.window_size[1], self.window_size[0] * self.window_size[1], -1)  # Wh*Ww,Wh*Ww,nH
         relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()  # nH, Wh*Ww, Wh*Ww
-        attn = attn + relative_position_bias.unsqueeze(0)
+        attn = attn + attn_edge + relative_position_bias.unsqueeze(0)
 
         if mask is not None:
             nw = mask.shape[0]
@@ -493,7 +499,7 @@ class SwinTransformerBlock(nn.Module):
 
         shortcut = x
         x = self.norm1(x)
-        x_sharp = (x + x_edge).view(b, h, w, c)
+        x_edge = x_edge.view(b, h, w, c)
         x = x.view(b, h, w, c)
         
         # Conv_X
@@ -503,22 +509,18 @@ class SwinTransformerBlock(nn.Module):
         # cyclic shift
         if self.shift_size > 0:
             shifted_x = torch.roll(x, shifts=(-self.shift_size, -self.shift_size), dims=(1, 2))
-            shifted_x_sharp = torch.roll(x_sharp, shifts=(-self.shift_size, -self.shift_size), dims=(1, 2))
         else:
             shifted_x = x
-            shifted_x_sharp = x_sharp
 
         # partition windows
         x_windows = window_partition(shifted_x, self.window_size)  # nw*b, window_size, window_size, c
-        x_sharp_windows = window_partition(shifted_x_sharp, self.window_size)
         x_windows = x_windows.view(-1, self.window_size * self.window_size, c)  # nw*b, window_size*window_size, c
-        x_sharp_windows = x_sharp_windows.view(-1, self.window_size * self.window_size, c)
 
         # W-MSA/SW-MSA (to be compatible for testing on images whose shapes are the multiple of window size
         if self.input_resolution == x_size:
-            attn_windows = self.attn(x_windows, x_sharp_windows, mask=self.attn_mask)  # nw*b, window_size*window_size, c
+            attn_windows = self.attn(x_windows, x_edge, mask=self.attn_mask)  # nw*b, window_size*window_size, c
         else:
-            attn_windows = self.attn(x_windows, x_sharp_windows, mask=self.calculate_mask(x_size).to(x.device))
+            attn_windows = self.attn(x_windows, x_edge, mask=self.calculate_mask(x_size).to(x.device))
 
         # merge windows
         attn_windows = attn_windows.view(-1, self.window_size, self.window_size, c)
