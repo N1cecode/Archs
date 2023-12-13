@@ -6,8 +6,7 @@ import torch
 import torch.nn as nn
 import torch.utils.checkpoint as checkpoint
 
-# from basicsr.utils.registry import ARCH_REGISTRY
-from basicsr.archs.arch_util import to_2tuple, trunc_normal_
+from archs.arch_util import to_2tuple, trunc_normal_
 import torch.nn.functional as F
 
 

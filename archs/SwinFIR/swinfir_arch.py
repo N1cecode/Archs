@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 import torch.utils.checkpoint as checkpoint
 
-from basicsr.utils.registry import ARCH_REGISTRY
-from basicsr.archs.arch_util import to_2tuple, trunc_normal_
+from utils.registry import ARCH_REGISTRY
+from archs.arch_util import to_2tuple, trunc_normal_
 from .swinfir_utils import WindowAttention, DropPath, Mlp, SFB
 from .swinfir_utils import PatchEmbed, PatchUnEmbed, Upsample, UpsampleOneStep
 from .swinfir_utils import window_partition, window_reverse

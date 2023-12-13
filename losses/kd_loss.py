@@ -4,7 +4,7 @@ from torch import autograd as autograd
 from torch import nn as nn
 from torch.nn import functional as F
 from .loss_util import weighted_loss
-from basicsr.utils.registry import LOSS_REGISTRY
+from utils.registry import LOSS_REGISTRY
 
 _reduction_modes = ['none', 'mean', 'sum']
 

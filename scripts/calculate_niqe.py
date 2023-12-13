@@ -3,8 +3,8 @@ import cv2
 import os
 import warnings
 
-from basicsr.metrics import calculate_niqe
-from basicsr.utils import scandir
+from metrics import calculate_niqe
+from utils import scandir
 
 
 def main(args):

@@ -3,20 +3,20 @@ from collections import OrderedDict
 from os import path as osp
 from tqdm import tqdm
 
-from basicsr.archs import build_network
-from basicsr.losses import build_loss
-from basicsr.metrics import calculate_metric
-from basicsr.utils import get_root_logger, imwrite, tensor2img
-from basicsr.utils.registry import MODEL_REGISTRY
+from archs import build_network
+from losses import build_loss
+from metrics import calculate_metric
+from utils import get_root_logger, imwrite, tensor2img
+from utils.registry import MODEL_REGISTRY
 from .base_model import BaseModel
 
 
 @MODEL_REGISTRY.register()
-class SRModel(BaseModel):
+class TeacherModel(BaseModel):
     """Base SR model for single image super-resolution."""
 
     def __init__(self, opt):
-        super(SRModel, self).__init__(opt)
+        super(TeacherModel, self).__init__(opt)
 
         # define network
         self.net_g = build_network(opt['network_g'])

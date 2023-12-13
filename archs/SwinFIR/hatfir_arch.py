@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
-from basicsr.utils.registry import ARCH_REGISTRY
+from utils.registry import ARCH_REGISTRY
 from .local_arch import Local_Base
-from basicsr.archs.arch_util import trunc_normal_
+from archs.arch_util import trunc_normal_
 from .swinfir_utils import HAB, OCAB, window_partition, SFB
 from .swinfir_utils import PatchEmbed, PatchUnEmbed, Upsample
 
