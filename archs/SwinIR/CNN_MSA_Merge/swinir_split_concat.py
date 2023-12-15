@@ -331,7 +331,7 @@ class SwinTransformerBlock(nn.Module):
 
         # partition windows
         x_windows = window_partition(shifted_x, self.window_size)  # nw*b, window_size, window_size, c
-        x_windows = x_windows.view(-1, self.window_size * self.window_size, c)  # nw*b, window_size*window_size, c
+        x_windows = x_windows.view(-1, self.window_size * self.window_size, c//2)  # nw*b, window_size*window_size, c
 
         # W-MSA/SW-MSA (to be compatible for testing on images whose shapes are the multiple of window size
         if self.input_resolution == x_size:
