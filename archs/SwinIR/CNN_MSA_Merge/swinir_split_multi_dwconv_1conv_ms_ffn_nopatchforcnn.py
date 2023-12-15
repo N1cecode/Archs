@@ -14,18 +14,21 @@ class dwconv(nn.Module):
         super(dwconv, self).__init__()
         self.hidden_features = hidden_features
         self.conv1 = nn.Sequential(
-            nn.Conv2d(hidden_features, hidden_features, kernel_size=1, stride=1, padding=0, groups=hidden_features), nn.GELU())
+            nn.Conv2d(hidden_features, hidden_features, kernel_size=1, stride=1, padding=0, groups=hidden_features))
         self.conv3 = nn.Sequential(
-            nn.Conv2d(hidden_features, hidden_features, kernel_size=3, stride=1, padding=1, groups=hidden_features), nn.GELU())
+            nn.Conv2d(hidden_features, hidden_features, kernel_size=3, stride=1, padding=1, groups=hidden_features))
         self.conv5 = nn.Sequential(
-            nn.Conv2d(hidden_features, hidden_features, kernel_size=5, stride=1, padding=2, groups=hidden_features), nn.GELU())
+            nn.Conv2d(hidden_features, hidden_features, kernel_size=5, stride=1, padding=2, groups=hidden_features))
         self.conv7 = nn.Sequential(
-            nn.Conv2d(hidden_features, hidden_features, kernel_size=7, stride=1, padding=3, groups=hidden_features), nn.GELU())
+            nn.Conv2d(hidden_features, hidden_features, kernel_size=7, stride=1, padding=3, groups=hidden_features))
+        
+        self.gelu = nn.GELU()
         
         
     def forward(self, x, x_size):
         x = x.transpose(1, 2).contiguous().view(x.shape[0], self.hidden_features, x_size[0], x_size[1])  # b Ph*Pw c
         x = self.conv1(x) + self.conv3(x) + self.conv5(x) + self.conv7(x)
+        x = self.gelu(x)
         x = x.flatten(2).transpose(1, 2).contiguous()
         return x
 
@@ -340,7 +343,7 @@ class SwinTransformerBlock(nn.Module):
             attn_windows = self.attn(x_windows, mask=self.calculate_mask(x_size).to(x_msa.device))
 
         # merge windows
-        attn_windows = attn_windows.view(-1, self.window_size, self.window_size, c)
+        attn_windows = attn_windows.view(-1, self.window_size, self.window_size, c//2)
         shifted_x = window_reverse(attn_windows, self.window_size, h, w)  # b h' w' c
 
         # reverse cyclic shift
