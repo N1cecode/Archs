@@ -216,41 +216,6 @@ class TokenMixerCNN(nn.Module):
         x = self.conv1x1(x)
         return self.act(x)
         
-class TokenMixer(nn.Module):
-    def __init__(self, dim, window_size, num_heads, kernel_size=5, qkv_bias=True, qk_scale=None, attn_drop=0., proj_drop=0., **kwargs):
-        super().__init__()
-        self.dim = dim
-        self.window_size = window_size
-        
-        self.msa = WindowAttention(
-            dim//2,
-            window_size=to_2tuple(window_size),
-            num_heads=num_heads,
-            qkv_bias=qkv_bias,
-            qk_scale=qk_scale,
-            attn_drop=attn_drop,
-            proj_drop=proj_drop)
-        
-        # Adding CNN layer
-        self.cnn = TokenMixerCNN(dim=dim//2)
-        # self.cnn = nn.Conv2d(dim//2, dim//2, kernel_size=cnn_kernel_size, padding=cnn_kernel_size//2, groups=dim//2)
-        # self.cnn = nn.Identity()
-        
-    def forward(self, x, mask=None):
-        b, n, c = x.shape
-        
-        # Splitting the input into two parts
-        x1, x2 = x.split(c//2, dim=2)
-
-        x1 = self.msa(x1, mask)
-
-        x2 = x2.transpose(1, 2).contiguous().view(x2.shape[0], self.dim//2, self.window_size[0], self.window_size[1])
-        x2 = self.cnn(x2)
-        x2 = x2.flatten(2).transpose(1, 2).contiguous()
-        
-        x = torch.cat((x1, x2), dim=2)
-        
-        return x
 
 class SwinTransformerBlock(nn.Module):
     r""" Swin Transformer Block.
@@ -300,15 +265,16 @@ class SwinTransformerBlock(nn.Module):
 
         self.norm1 = norm_layer(dim)
         
-        # TODO
-        self.attn = TokenMixer(
-            dim,
+        self.attn = WindowAttention(
+            dim=dim//2,
             window_size=to_2tuple(self.window_size),
             num_heads=num_heads,
             qkv_bias=qkv_bias,
             qk_scale=qk_scale,
             attn_drop=attn_drop,
             proj_drop=drop)
+        
+        self.cnn = TokenMixerCNN(dim=dim//2)
 
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.norm2 = norm_layer(dim)
@@ -351,12 +317,17 @@ class SwinTransformerBlock(nn.Module):
         shortcut = x
         x = self.norm1(x)
         x = x.view(b, h, w, c)
+        
+        x_msa, x_cnn = x.split(c//2, dim=3)
 
+        x_cnn = self.cnn(x_cnn.permute(0, 3, 1, 2))
+        x_cnn = x_cnn.permute(0, 2, 3, 1).contiguous().view(b, h * w, c//2)
+        
         # cyclic shift
         if self.shift_size > 0:
-            shifted_x = torch.roll(x, shifts=(-self.shift_size, -self.shift_size), dims=(1, 2))
+            shifted_x = torch.roll(x_msa, shifts=(-self.shift_size, -self.shift_size), dims=(1, 2))
         else:
-            shifted_x = x
+            shifted_x = x_msa
 
         # partition windows
         x_windows = window_partition(shifted_x, self.window_size)  # nw*b, window_size, window_size, c
@@ -366,7 +337,7 @@ class SwinTransformerBlock(nn.Module):
         if self.input_resolution == x_size:
             attn_windows = self.attn(x_windows, mask=self.attn_mask)  # nw*b, window_size*window_size, c
         else:
-            attn_windows = self.attn(x_windows, mask=self.calculate_mask(x_size).to(x.device))
+            attn_windows = self.attn(x_windows, mask=self.calculate_mask(x_size).to(x_msa.device))
 
         # merge windows
         attn_windows = attn_windows.view(-1, self.window_size, self.window_size, c)
@@ -374,10 +345,12 @@ class SwinTransformerBlock(nn.Module):
 
         # reverse cyclic shift
         if self.shift_size > 0:
-            x = torch.roll(shifted_x, shifts=(self.shift_size, self.shift_size), dims=(1, 2))
+            x_msa = torch.roll(shifted_x, shifts=(self.shift_size, self.shift_size), dims=(1, 2))
         else:
-            x = shifted_x
-        x = x.view(b, h * w, c)
+            x_msa = shifted_x
+        x_msa = x_msa.view(b, h * w, c//2)
+        
+        x = torch.cat((x_msa, x_cnn), dim=2)
 
         # FFN
         x = shortcut + self.drop_path(x)
