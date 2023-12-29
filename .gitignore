@@ -32,6 +32,7 @@ test.py
 *.zip
 *.npy
 *.pt
+*.state
 
 # template
 
